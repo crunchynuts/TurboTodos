@@ -1,0 +1,3 @@
+title,tags,project,status,priority,start,due,notes,source_key,milestone,reminder
+Draft the launch checklist,"Planning,Launch",,backlog,medium,,,List the steps needed for launch.,launch-checklist,false,
+Review the quarterly plan,"Planning,Review",,backlog,high,,,Confirm the goals and next actions.,quarterly-review,false,
