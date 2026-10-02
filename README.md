@@ -167,3 +167,33 @@ Progress filters: Not started / Partial / Completed can be selected independentl
 ## Zoom
 
 Use the top-bar minus / percentage / plus controls to scale the entire app from 80% to 180%, in 10% increments. Clicking the percentage resets to 100%. Keyboard shortcuts: Ctrl/Cmd + plus or minus, and Ctrl/Cmd + 0 to reset. Zoom is saved with the workspace and applies to task editors and dialogs without discarding drafts.
+
+## Quick capture, attention, and reusable work
+
+- **Quick capture — Ctrl/Cmd+Shift+N**: enter a title and press Enter repeatedly. Each task saves immediately; the input stays open. The shortcut appears on the button, in the dialog, and in Help. These are app shortcuts (the app needs focus).
+- **Jump to task — Ctrl/Cmd+K**: search a title or task number; Enter opens the first match. Up to 40 matches are shown; refine the search or Tab to a result.
+- **Waiting on**: record a person/team/response and a separate follow-up date in task details. The Waiting on view lists outstanding waits. Followed up records an update and lets you schedule the next follow-up or resolve the wait.
+- **Needs attention**: a compact list of overdue/today deadlines, reviews due, waiting follow-ups, reminders due, and newly cleared dependencies, with a reason and action for each. Existing filters still apply. Got it acknowledges a cleared dependency set; reopening and completing a dependency again resurfaces it. Dismiss reminder clears the reminder. Time-based attention refreshes while the app is open.
+- **Bulk edit**: Select tasks → Edit fields. Check which fields to change: status, priority, project, deadline, or delegated person. A checked blank deadline/person clears it. Invalid date combinations stop the entire edit. Completing parents with unselected unfinished subtasks asks for confirmation.
+- **Remembered layout**: view, scope, search, filters (including advanced/date filters), sorting, grouping, collapsed board columns, and expanded subtasks persist in the local workspace. Zoom/coloring also persist. Layout writes are debounced and use the same ordered save queue.
+- **Templates**: open a saved task → Save template. Includes up to 500 tasks (the task plus its direct subtasks), checklists, notes, tags, and internal dependencies. Use templates from the sidebar. Copies receive new IDs/numbers, remap relationships, reset completion/history/reminders, and shift start/due dates relative to an anchor. Archived project assignments are cleared. Up to 100 templates are supported.
+- **Dependency context**: unfinished prerequisites appear as clickable task numbers and titles beside task metadata.
+
+CSV/JSON imports also accept `waiting_on` and `follow_up_date` (YYYY-MM-DD); Excel includes both fields.
+
+## Trash and automatic backups
+
+Open **Trash & backups** in the sidebar. Deleted tasks are retained in SQLite and can be restored with their original numbers. Existing valid parent/outgoing dependency links are retained; links from children and other tasks that were detached during deletion are not automatically reconstructed. Undo still reverses the full most recent workspace change.
+
+Workspace snapshots are local JSON files in `data/tasks-backups/` (or a matching `<database-name>-backups` directory beside a custom database). A snapshot is taken before the first edit, then before an edit at most once per hour; the latest 30 are retained. Recovery takes an additional safety snapshot before changing anything. Restore workspace replaces tasks, projects, tags, templates, and settings from the chosen snapshot; the task-number registry and trash remain in SQLite. Version checks prevent overwriting edits from another window.
+
+These backups and the database remain inside ignored `data/`; GitHub downloads contain no personal tasks or demo data. Automatic local snapshots are not off-device backups. To move the workspace, close the app and copy the `data/` folder.
+
+Validate the added workflows without touching personal data:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s test -q
+.\.venv\Scripts\python.exe test/desktop_qol_smoke.py
+```
+
+Templates can also be created from scratch or edited under **Task templates → New template / Edit**. The dedicated editor edits a separate draft, with main-task/subtask navigation, add/remove subtasks, rich notes, checklists, project/tags/priority, dates, ownership, review cadence, and internal dependencies. Save template commits the complete draft; cancel discards it. Editing a template does not change existing tasks, and Save template from task details remains available. New task copies use the edited template and reset completion as before.

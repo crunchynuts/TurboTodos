@@ -88,7 +88,7 @@ def run():
         with zipfile.ZipFile(io.BytesIO(base64.b64decode(payload['encoded']))) as workbook:
             sheet=workbook.read('xl/worksheets/sheet1.xml').decode()
             assert 'Review history' in sheet and 'Priya' in sheet and '7 of 12 complete' in sheet
-            assert 'A1:V3' in sheet
+            assert 'A1:X3' in sheet
         result.append('Saved views and Excel metadata passed')
         checks=r'''(()=>{
           const check=(v,msg)=>{if(!v)throw Error(msg)},s=smoke.getState(),id=s.tasks[1].id;

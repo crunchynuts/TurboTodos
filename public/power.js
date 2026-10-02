@@ -15,11 +15,24 @@ export function taskProgress(task,children=[]){
   return task.status==='done'?'completed':task.status==='doing'?'partial':'not-started';
 }
 
+export function attentionReasons(t,lookup,now=today(),clock=new Date()) {
+  if(t.status==='done')return [];
+  const reasons=[];
+  if(t.due&&t.due<=now)reasons.push(t.due<now?'Overdue':'Due today');
+  if(t.reviewDate&&t.reviewDate<=now)reasons.push('Review due');
+  if(t.waitingOn&&t.followUpDate&&t.followUpDate<=now)reasons.push('Follow up with '+t.waitingOn);
+  if(t.reminder&&new Date(t.reminder)<=clock)reasons.push('Reminder due');
+  const signature=[...t.dependencies].sort().map(id=>id+':'+(lookup(id)?.completedAt||'done')).join('|');
+  if(t.dependencies.length&&t.dependencies.every(id=>lookup(id)?.status==='done')&&t.readyAcknowledged!==signature)reasons.push('Dependencies cleared');
+  return reasons;
+}
+
 export function matchesFilter(task,node,tasks,now=today()) {
   if (!node || !node.rules?.length && node.rules) return true;
   if (node.rules) return node.mode==='any' ? node.rules.some(r=>matchesFilter(task,r,tasks,now)) : node.rules.every(r=>matchesFilter(task,r,tasks,now));
   const {field,op,value=''}=node;
   if(Array.isArray(op))return !op.length||op.some(choice=>matchesFilter(task,{...node,op:choice},tasks,now));
+  if(field==='attention')return Boolean(attentionReasons(task,id=>tasks.find(t=>t.id===id),now).length)===(op==='yes');
   const values=Array.isArray(value)?value:[value];
   if(field==='due'||field==='review') {
     const date=field==='due'?task.due:task.reviewDate;
@@ -44,8 +57,9 @@ export function matchesFilter(task,node,tasks,now=today()) {
   return !values.length|| (op==='isNot'?!values.includes(task[field]):values.includes(task[field]));
 }
 
-const fields=[['due','Deadline'],['review','Next review'],['delegated','Delegation'],['tags','Tags'],['status','Status'],['project','Project'],['priority','Priority'],['blocked','Dependencies blocked'],['radar','Keep on Radar'],['parent','Task level'],['progress','Task progress']];
+const fields=[['attention','Needs attention'],['due','Deadline'],['review','Next review'],['delegated','Delegation'],['tags','Tags'],['status','Status'],['project','Project'],['priority','Priority'],['blocked','Dependencies blocked'],['radar','Keep on Radar'],['parent','Task level'],['progress','Task progress']];
 const operations={
+  attention:[['yes','Yes'],['no','No']],
   progress:[['not-started','Not started'],['partial','Partial'],['completed','Completed']],
   due:[['overdue','Overdue'],['today','Today'],['7','Next 7 days'],['14','Next 14 days'],['30','Next 30 days'],['week','This week (Monday–Sunday)'],['month','This calendar month'],['none','No deadline']],
   review:[['due','Review due / overdue'],['7','Next 7 days'],['14','Next 14 days'],['30','Next 30 days'],['none','No review date']],
@@ -60,16 +74,19 @@ let host, active=blank(), activeName='', draft, quick=[], expanded=new Set();
 
 export const power={
   configure(value){host=value;},
+  layout(){return {active,activeName,quick,expanded:[...expanded]};},
+  restoreLayout(l){if(!l)return;active=l.active?.rules?l.active:blank();activeName=l.activeName||'';quick=Array.isArray(l.quick)?l.quick:[];expanded=new Set(l.expanded||[]);},
   reset(){active=blank();activeName='';quick=[];},
   match(t){return matchesFilter(t,active,host.state().tasks)&&matchesFilter(t,this.quickFilter(),host.state().tasks);},
   hasFilter(){return active.rules.length>0||quick.length>0;},
+  attention(t){return attentionReasons(t,host.task);},
   progress(task){return taskProgress(task,this.children(task.id));},
   children(id){return host.children(id);},
   reviewDue(t){return t.status!=='done'&&t.reviewDate&&t.reviewDate<=today();},
   radar(t){return t.status!=='done'&&(t.onRadar||t.reviewDate||t.delegatedTo||t.due&&t.due<=plus(today(),29));},
-  myDay(t){return t.status!=='done'&&(this.reviewDue(t)||t.due&&t.due<=today()||!t.delegatedTo&&!t.onRadar&&!t.reviewDate&&t.status==='doing');},
-  visible(tasks){
-    if(host.filtersActive()||this.hasFilter())return tasks;
+  myDay(t){return t.status!=='done'&&(this.reviewDue(t)||t.due&&t.due<=today()||!t.waitingOn&&!t.delegatedTo&&!t.onRadar&&!t.reviewDate&&t.status==='doing');},
+  visible(tasks,respectCollapse=false){
+    if(!respectCollapse&&(host.filtersActive()||this.hasFilter()))return tasks;
     const ids=new Set(tasks.map(t=>t.id));
     const children=new Map();for(const t of tasks){if(t.parentId){if(!children.has(t.parentId))children.set(t.parentId,[]);children.get(t.parentId).push(t);}}
     const top=tasks.filter(t=>!t.parentId||!ids.has(t.parentId));
@@ -77,15 +94,15 @@ export const power={
   },
   meta(t){
     const parent=host.task(t.parentId),children=this.children(t.id),done=children.filter(c=>c.status==='done').length;
-    return `<div class="power-meta">${parent?`<button type="button" class="parent-label" data-power="open" data-id="${parent.id}">↳ #${parent.number||'…'} · ${escape(parent.title)}</button>`:''}${t.delegatedTo?`<span>Delegated to <b>${escape(t.delegatedTo)}</b></span>`:''}${t.reviewDate?`<span class="${this.reviewDue(t)?'overdue':''}">Review ${escape(t.reviewDate)}</span>`:t.onRadar?'<span>On Radar</span>':''}${children.length?`<button type="button" class="text-button" data-power="expand" data-id="${t.id}" aria-expanded="${expanded.has(t.id)}">${expanded.has(t.id)?'▾':'▸'} ${done}/${children.length} subtasks complete${done===children.length&&t.status!=='done'?' · Ready to complete':''}</button>`:''}</div>`;
+    return host.extraMeta(t)+`<div class="power-meta">${parent?`<button type="button" class="parent-label" data-power="open" data-id="${parent.id}">↳ #${parent.number||'…'} · ${escape(parent.title)}</button>`:''}${t.delegatedTo?`<span>Delegated to <b>${escape(t.delegatedTo)}</b></span>`:''}${t.reviewDate?`<span class="${this.reviewDue(t)?'overdue':''}">Review ${escape(t.reviewDate)}</span>`:t.onRadar?'<span>On Radar</span>':''}${children.length?`<button type="button" class="text-button" data-power="expand" data-id="${t.id}" aria-expanded="${expanded.has(t.id)}">${expanded.has(t.id)?'▾':'▸'} ${done}/${children.length} subtasks complete${done===children.length&&t.status!=='done'?' · Ready to complete':''}</button>`:''}</div>`;
   },
   toolbar(){return `<div class="power-toolbar"><button class="button ${this.hasFilter()?'toggled':''}" data-power="filters">Advanced filters${activeName?' · '+escape(activeName):this.hasFilter()?' · '+active.rules.length+' conditions':''}</button>${this.hasFilter()?'<button class="text-button" data-power="clear">Clear date / advanced filters</button>':''}<span class="field-help">Rolling windows include today. Date choices combine with the other filters.</span></div>${inlineChoices('Quick dates',[['overdue','Overdue'],['7','Due in next 7 days'],['14','Due in next 14 days'],['30','Due in next 30 days'],['week','Due this week'],['month','Due this month'],['review','Reviews due'],['attention','Needs my attention']],quick,'quick-dates')}`;},
   savedNav(){return `<div class="side-label">SAVED VIEWS</div><nav>${(host.state().savedViews||[]).map(v=>`<button class="nav-item" data-power="load-view" data-id="${v.id}">${escape(v.name)}</button>`).join('')||'<small class="field-help">Save a filter to keep it here.</small>'}</nav>`;},
   taskFields(t){
     const children=this.children(t.id),parents=host.state().tasks.filter(p=>!p.parentId&&p.id!==t.id);
-    return `<div class="detail-section"><h3>Ownership & reviews</h3><div class="detail-fields"><label>Delegated to<input name="delegatedTo" maxlength="200" value="${escape(t.delegatedTo)}" list="delegates" placeholder="Person or team"></label><datalist id="delegates">${[...new Set(host.state().tasks.map(x=>x.delegatedTo).filter(Boolean))].map(n=>`<option value="${escape(n)}">`).join('')}</datalist><label>Next review<input name="reviewDate" type="date" value="${escape(t.reviewDate)}"></label><label>Review every (days)<input name="reviewEveryDays" type="number" min="0" max="3650" value="${t.reviewEveryDays||0}"></label><label><input name="onRadar" type="checkbox" ${t.onRadar?'checked':''}> Keep on Radar</label></div><small class="field-help">0 = no repeat. Reviewed schedules from today, without changing the deadline. Delegation never changes status.</small>${host.state().tasks.some(x=>x.id===t.id)?`<button type="button" class="button" data-power="review" data-id="${t.id}">Reviewed / add update</button>`:'<small class="field-help">Save the task first to record a review.</small>'}<details class="review-history"><summary>Review history (${t.reviewHistory?.length||0})</summary>${[...(t.reviewHistory||[])].reverse().map(e=>`<article><time>${escape(new Date(e.at).toLocaleString())}</time><p>${escape(e.note)||'Reviewed'}</p></article>`).join('')||'<p>No reviews recorded yet.</p>'}</details></div><div class="detail-section parent-section"><h3>Parent task</h3><label><span class="sr-only">Parent task</span><select name="parentId" ${children.length?'disabled':''}><option value="">None — top-level task</option>${options(parents.map(p=>[p.id,'#'+(p.number||'…')+' · '+p.title]),t.parentId)}</select></label><button type="button" class="button open-parent" id="open-parent" data-power="open" data-id="${escape(t.parentId||'')}" ${t.parentId?'':'hidden'}>↑ Open parent${t.parentId?' #'+(host.task(t.parentId)?.number||'…'):''}</button>${children.length?'<input type="hidden" name="parentId" value=""><small class="field-help">A task with subtasks cannot itself become a subtask.</small>':''}<small class="field-help">The task this one belongs to. Leave blank for a top-level task.</small></div><div class="detail-section subtasks-section"><h3>Subtasks <span class="selection-count">${children.filter(c=>c.status==='done').length}/${children.length} complete</span></h3>${!children.length?'<p class="field-help">No subtasks.</p>':''}${children.map(c=>`<button type="button" class="subtask-link" data-power="open" data-id="${c.id}">${c.status==='done'?'✓':'○'} ${escape(c.title)} <small>${escape(c.delegatedTo)}</small></button>`).join('')}${!t.parentId&&host.state().tasks.some(x=>x.id===t.id)?`<button type="button" class="button" data-power="add-subtask" data-id="${t.id}">+ Add subtask</button>`:''}<small class="field-help">${t.parentId?'This task is already a subtask. Only one level of subtasks is supported.':'Break this task into independently tracked pieces, each with its own dates and ownership. Use the checklist for smaller steps.'}</small></div>`;
+    return `<div class="detail-section"><h3>Waiting on</h3><div class="detail-fields"><label>Waiting on<input name="waitingOn" maxlength="200" value="${escape(t.waitingOn)}" placeholder="Person, team, or response"></label><label>Follow-up date<input name="followUpDate" type="date" value="${escape(t.followUpDate)}"></label></div><small class="field-help">Separate from delegation and the deadline. Follow-ups appear in Needs attention when due.</small>${t.waitingOn?`<button type="button" class="button" data-qol="follow-up" data-id="${t.id}">Followed up / record update</button>`:''}</div><div class="detail-section"><h3>Ownership & reviews</h3><div class="detail-fields"><label>Delegated to<input name="delegatedTo" maxlength="200" value="${escape(t.delegatedTo)}" list="delegates" placeholder="Person or team"></label><datalist id="delegates">${[...new Set(host.state().tasks.map(x=>x.delegatedTo).filter(Boolean))].map(n=>`<option value="${escape(n)}">`).join('')}</datalist><label>Next review<input name="reviewDate" type="date" value="${escape(t.reviewDate)}"></label><label>Review every (days)<input name="reviewEveryDays" type="number" min="0" max="3650" value="${t.reviewEveryDays||0}"></label><label><input name="onRadar" type="checkbox" ${t.onRadar?'checked':''}> Keep on Radar</label></div><small class="field-help">0 = no repeat. Reviewed schedules from today, without changing the deadline. Delegation never changes status.</small>${host.state().tasks.some(x=>x.id===t.id)?`<button type="button" class="button" data-power="review" data-id="${t.id}">Reviewed / add update</button>`:'<small class="field-help">Save the task first to record a review.</small>'}<details class="review-history"><summary>Review history (${t.reviewHistory?.length||0})</summary>${[...(t.reviewHistory||[])].reverse().map(e=>`<article><time>${escape(new Date(e.at).toLocaleString())}</time><p>${escape(e.note)||'Reviewed'}</p></article>`).join('')||'<p>No reviews recorded yet.</p>'}</details></div><div class="detail-section parent-section"><h3>Parent task</h3><label><span class="sr-only">Parent task</span><select name="parentId" ${children.length?'disabled':''}><option value="">None — top-level task</option>${options(parents.map(p=>[p.id,'#'+(p.number||'…')+' · '+p.title]),t.parentId)}</select></label><button type="button" class="button open-parent" id="open-parent" data-power="open" data-id="${escape(t.parentId||'')}" ${t.parentId?'':'hidden'}>↑ Open parent${t.parentId?' #'+(host.task(t.parentId)?.number||'…'):''}</button>${children.length?'<input type="hidden" name="parentId" value=""><small class="field-help">A task with subtasks cannot itself become a subtask.</small>':''}<small class="field-help">The task this one belongs to. Leave blank for a top-level task.</small></div><div class="detail-section subtasks-section"><h3>Subtasks <span class="selection-count">${children.filter(c=>c.status==='done').length}/${children.length} complete</span></h3>${!children.length?'<p class="field-help">No subtasks.</p>':''}${children.map(c=>`<button type="button" class="subtask-link" data-power="open" data-id="${c.id}">${c.status==='done'?'✓':'○'} ${escape(c.title)} <small>${escape(c.delegatedTo)}</small></button>`).join('')}${!t.parentId&&host.state().tasks.some(x=>x.id===t.id)?`<button type="button" class="button" data-power="add-subtask" data-id="${t.id}">+ Add subtask</button>`:''}<small class="field-help">${t.parentId?'This task is already a subtask. Only one level of subtasks is supported.':'Break this task into independently tracked pieces, each with its own dates and ownership. Use the checklist for smaller steps.'}</small></div>`;
   },
-  readFields(f){return {delegatedTo:f.get('delegatedTo').trim(),reviewDate:f.get('reviewDate'),reviewEveryDays:Number(f.get('reviewEveryDays')||0),onRadar:f.has('onRadar'),parentId:f.get('parentId')||''};},
+  readFields(f){return {waitingOn:(f.get('waitingOn')||'').trim(),followUpDate:f.get('followUpDate')||'',delegatedTo:f.get('delegatedTo').trim(),reviewDate:f.get('reviewDate'),reviewEveryDays:Number(f.get('reviewEveryDays')||0),onRadar:f.has('onRadar'),parentId:f.get('parentId')||''};},
   validateTask(t){const parent=host.task(t.parentId);if(t.parentId&&(!parent||parent.parentId||t.parentId===t.id||this.children(t.id).length))return 'Choose a top-level parent. Only one level of subtasks is supported.';return '';},
   confirmComplete(t){const left=this.children(t.id).filter(c=>c.status!=='done').length;return !left||confirm(`${left} subtask(s) are still incomplete. Complete this parent anyway? Subtasks will stay open.`);},
   review(id){
@@ -97,7 +114,7 @@ export const power={
     },'Reviewed');
   },
   quickFilter(){
-    return {mode:'any',rules:quick.map(name=>name==='review'?{field:'review',op:'due'}:name==='attention'?{mode:'any',rules:[{field:'due',op:'overdue'},{field:'review',op:'due'}]}:{field:'due',op:name})};
+    return {mode:'any',rules:quick.map(name=>name==='review'?{field:'review',op:'due'}:name==='attention'?{field:'attention',op:'yes'}:{field:'due',op:name})};
   },
   preset(name){quick=Array.isArray(name)?name:[name];host.render();},
   filters(){draft=quick.length?(active.rules.length?{mode:'all',rules:[structuredClone(active),this.quickFilter()]}:this.quickFilter()):structuredClone(active);this.drawFilter();},

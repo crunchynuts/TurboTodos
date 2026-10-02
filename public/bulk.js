@@ -27,7 +27,7 @@ export const bulk = {
       <div><strong>${this.ids.size} selected</strong>${hidden ? `<small>including ${hidden} outside this filter</small>` : '<small>Select tasks using the square checkboxes.</small>'}</div>
       <button class="text-button" data-bulk="select-filtered">Select all ${visible.size} filtered</button>
       <button class="text-button" data-bulk="clear">Clear selection</button>
-      <span class="bulk-toolbar-spacer"></span>
+      <span class="bulk-toolbar-spacer"></span><button class="button" data-qol="bulk-edit" ${this.ids.size ? '' : 'disabled'}>Edit fields</button>
       <button class="button" data-bulk="add" ${this.ids.size ? '' : 'disabled'}>+ Add tags</button>
       <button class="button" data-bulk="remove" ${this.ids.size ? '' : 'disabled'}>− Remove tags</button>
       <button class="icon-button" data-bulk="toggle" aria-label="Exit task selection">✕</button>
@@ -102,7 +102,7 @@ export const bulk = {
         <label class="modal-label">Duplicates<select id="import-duplicates"><option value="skip">Skip existing & repeated tasks</option><option value="allow">Import duplicates as new tasks</option></select></label>
       </div>
       <p class="field-help">Per-row project and status override defaults. Row tags and shared tags are combined. Duplicates match source_key when supplied, otherwise title + project. CSV tags may be comma- or pipe-separated; JSON tags may be a list.</p>
-      <details class="import-schema"><summary>Available columns & formats</summary><p><code>title, tags, project, status, priority, start, due, notes, milestone, reminder, source_key</code></p><p>Dates: YYYY-MM-DD. Reminders: YYYY-MM-DDTHH:MM (local time). Priority: low / medium / high / urgent. Milestone: true / false. Project and status accept an existing name or ID. Notes are plain text. Optional <code>path</code> is added to notes; no linked files are read or uploaded.</p><p>Unknown columns are reported so data is never silently dropped. Up to 5,000 tasks / 8 MB per import. An error in any row prevents the whole import.</p></details>
+      <details class="import-schema"><summary>Available columns & formats</summary><p><code>title, tags, project, status, priority, start, due, notes, milestone, reminder, source_key, delegated_to, review_date, review_every_days, on_radar, parent_id, waiting_on, follow_up_date</code></p><p>Dates: YYYY-MM-DD. Reminders: YYYY-MM-DDTHH:MM (local time). Priority: low / medium / high / urgent. Milestone: true / false. Project and status accept an existing name or ID. Notes are plain text. Optional <code>path</code> is added to notes; no linked files are read or uploaded.</p><p>Unknown columns are reported so data is never silently dropped. Up to 5,000 tasks / 8 MB per import. An error in any row prevents the whole import.</p></details>
       <div id="import-error" class="inline-error" role="alert"></div>
       <div id="import-preview" aria-live="polite"></div>
       <button type="button" class="button" id="preview-import">Preview import</button>`, () => commit(), 'Import tasks');

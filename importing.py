@@ -15,7 +15,7 @@ MAX_ROWS = 5000
 MAX_FILE_BYTES = 8 * 1024 * 1024
 FIELDS = {"title", "filename", "name", "tags", "project", "status", "priority",
           "start", "due", "notes", "path", "source_key", "milestone", "reminder",
-          "delegated_to", "review_date", "review_every_days", "on_radar", "parent_id"}
+          "delegated_to", "review_date", "review_every_days", "on_radar", "parent_id", "waiting_on", "follow_up_date"}
 
 
 def parse_tags(value):
@@ -135,6 +135,8 @@ def normalize(row, defaults, state):
     if parent_id and not any(t["id"] == parent_id and not t.get("parentId") for t in state["tasks"]):
         raise ValueError("parent_id must identify an existing top-level task")
     return {
+        "waitingOn": text(row.get("waiting_on", ""), "waiting on", 200).strip(),
+        "followUpDate": date_value(row.get("follow_up_date", ""), "follow-up date"),
         "delegatedTo": text(row.get("delegated_to", ""), "delegated person", 200).strip(),
         "reviewDate": date_value(row.get("review_date", ""), "review date"),
         "reviewEveryDays": int(cadence), "onRadar": radar in {"true", "yes", "1"},

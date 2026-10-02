@@ -12,7 +12,7 @@ from importing import apply_import, plan_import
 from storage import DEFAULT_DB, ROOT, Conflict, Store, bulk_tags, save_receipt
 
 MAX_BODY = 16 * 1024 * 1024
-PUBLIC = {"index.html", "style.css", "app.js", "bulk.js", "bulk.css", "export.js", "transport.js", "render.js", "filters.js", "power.js", "power.css", "favicon.svg", "import-template.csv"}
+PUBLIC = {"index.html", "style.css", "app.js", "bulk.js", "bulk.css", "export.js", "transport.js", "render.js", "filters.js", "power.js", "power.css", "qol.js", "favicon.svg", "import-template.csv"}
 
 
 class AppServer(ThreadingHTTPServer):
@@ -58,6 +58,8 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/api/workspace":
             return self.respond(200, self.server.store.read())
+        if path == "/api/recovery":
+            return self.respond(200, self.server.store.recovery_list())
         if path == "/api/health":
             return self.respond(200, {"app": "TurboTodos", "runtime": "python"})
         name = "index.html" if path == "/" else path.removeprefix("/")
@@ -83,6 +85,8 @@ class Handler(BaseHTTPRequestHandler):
             store = self.server.store
             if path == "/api/workspace" and self.command == "PUT":
                 return self.respond(200, save_receipt(store.save(payload), payload))
+            if path == "/api/recovery" and self.command == "POST":
+                return self.respond(200, store.recover(payload))
             if path == "/api/import/preview" and self.command == "POST":
                 summary, _ = plan_import(payload, store.read())
                 return self.respond(200, summary)
@@ -95,7 +99,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond(404, {"error": "Not found"})
         except Conflict as exc:
             self.respond(409, {"error": str(exc)})
-        except (ValueError, TypeError, KeyError, AttributeError) as exc:
+        except (ValueError, TypeError, KeyError, AttributeError, OSError) as exc:
             self.respond(400, {"error": str(exc)})
 
     do_PUT = handle_write

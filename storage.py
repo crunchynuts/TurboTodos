@@ -7,7 +7,7 @@ import os
 import re
 import sqlite3
 from contextlib import closing, contextmanager
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -58,7 +58,7 @@ def date_value(value, name, *, timestamp=False):
     return value
 
 
-def validate(state):
+def validate(state, *, template=False):
     if not isinstance(state, dict) or type(state.get("version")) is not int:
         raise ValueError("Invalid workspace version")
     for name in ("tasks", "columns", "projects", "tags"):
@@ -92,9 +92,29 @@ def validate(state):
     zoom = state["settings"].get("zoom", 100)
     if type(zoom) is not int or not 80 <= zoom <= 180 or zoom % 10:
         raise ValueError("Zoom must be 80 to 180 percent in steps of 10")
+    if not template:
+        templates = state.get("templates", [])
+        if not isinstance(templates, list) or len(templates) > 100:
+            raise ValueError("Keep at most 100 templates")
+        ids = set()
+        for item in templates:
+            if not isinstance(item, dict):
+                raise ValueError("Invalid template")
+            identifier = text(item.get("id"), "template id", 99, required=True)
+            if identifier in ids:
+                raise ValueError("Duplicate template")
+            ids.add(identifier)
+            text(item.get("name"), "template name", 100, required=True)
+            if not isinstance(item.get("tasks"), list) or not 1 <= len(item["tasks"]) <= 500:
+                raise ValueError("Templates support 1 to 500 tasks")
+            sample = {**state, "tasks": item["tasks"], "templates": []}
+            validate(sample, template=True)
     tasks = {t["id"]: t for t in state["tasks"]}
     validate_saved_views(state.get("savedViews", []))
     for task in state["tasks"]:
+        text(task.get("waitingOn", ""), "waiting on", 200)
+        date_value(task.get("followUpDate", ""), "follow-up date")
+        text(task.get("readyAcknowledged", ""), "dependency acknowledgement", 20000)
         text(task.get("delegatedTo", ""), "delegated person", 200)
         date_value(task.get("reviewDate", ""), "review date")
         cadence = task.get("reviewEveryDays", 0)
@@ -163,6 +183,7 @@ def validate(state):
 
 
 FILTER_OPS = {
+    "attention": {"yes", "no"},
     "due": {"overdue", "today", "7", "14", "30", "week", "month", "none"},
     "review": {"due", "7", "14", "30", "none"},
     "delegated": {"yes", "no", "person"},
@@ -237,6 +258,7 @@ class Store:
             if current != before:
                 current["version"] += 1
                 db.execute("UPDATE workspace SET value=? WHERE id=1", (json.dumps(current, ensure_ascii=False),))
+            db.execute("CREATE TABLE IF NOT EXISTS trash (id TEXT PRIMARY KEY, deleted_at TEXT NOT NULL, value TEXT NOT NULL)")
             db.execute("PRAGMA user_version=1")
 
     @staticmethod
@@ -263,7 +285,7 @@ class Store:
         with self.connect() as db:
             return json.loads(db.execute("SELECT value FROM workspace WHERE id=1").fetchone()[0])
 
-    def edit(self, expected_version, operation):
+    def edit(self, expected_version, operation, *, recovery=False):
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             current = json.loads(db.execute("SELECT value FROM workspace WHERE id=1").fetchone()[0])
@@ -276,13 +298,71 @@ class Store:
                 project.setdefault("active", previous_projects.get(project["id"], {}).get("active", True))
             archived = {p["id"] for p in result["projects"] if p.get("active") is False}
             for task in result["tasks"]:
-                if task["project"] in archived and previous_tasks.get(task["id"], {}).get("project") != task["project"]:
+                if not recovery and task["project"] in archived and previous_tasks.get(task["id"], {}).get("project") != task["project"]:
                     raise ValueError("Restore the archived project before assigning new tasks to it")
             validate(result)
+            self._backup(current, force=recovery)
+            remaining = {t["id"] for t in result["tasks"]}
+            for task in current["tasks"]:
+                if task["id"] not in remaining:
+                    db.execute("INSERT OR REPLACE INTO trash VALUES (?,?,?)", (task["id"], datetime.now(timezone.utc).isoformat(), json.dumps(task)))
+            db.executemany("DELETE FROM trash WHERE id=?", [(identifier,) for identifier in remaining])
             self._number_tasks(db, result)
             result["version"] = current["version"] + 1
             db.execute("UPDATE workspace SET value=? WHERE id=1", (json.dumps(result, ensure_ascii=False),))
             return result
+
+    def _backup(self, state, *, force=False):
+        folder = self.path.parent / (self.path.stem + "-backups")
+        folder.mkdir(exist_ok=True)
+        snapshots = sorted(folder.glob("snapshot-*.json"))
+        now = datetime.now(timezone.utc)
+        if not force and snapshots and now.timestamp() - snapshots[-1].stat().st_mtime < 3600:
+            return
+        target = folder / ("snapshot-" + now.strftime("%Y%m%dT%H%M%S%f") + ".json")
+        temporary = target.with_suffix(".tmp")
+        temporary.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+        temporary.replace(target)
+        for old in sorted(folder.glob("snapshot-*.json"))[:-30]:
+            old.unlink()
+
+    def recovery_list(self):
+        with self.connect() as db:
+            trash = [{"id": row[0], "deletedAt": row[1], "task": json.loads(row[2])}
+                     for row in db.execute("SELECT id,deleted_at,value FROM trash ORDER BY deleted_at DESC")]
+        folder = self.path.parent / (self.path.stem + "-backups")
+        backups = [{"name": p.name, "at": datetime.fromtimestamp(p.stat().st_mtime, timezone.utc).isoformat()}
+                   for p in sorted(folder.glob("snapshot-*.json"), reverse=True)]
+        return {"trash": trash, "backups": backups}
+
+    def recover(self, payload):
+        def operation(state):
+            if payload.get("backup"):
+                name = payload["backup"]
+                if not isinstance(name, str) or not re.fullmatch(r"snapshot-[0-9T]+\.json", name):
+                    raise ValueError("Invalid backup")
+                path = self.path.parent / (self.path.stem + "-backups") / name
+                if not path.is_file():
+                    raise ValueError("Backup no longer exists")
+                return json.loads(path.read_text(encoding="utf-8"))
+            with self.connect() as db:
+                row = db.execute("SELECT value FROM trash WHERE id=?", (payload.get("id"),)).fetchone()
+            if not row:
+                raise ValueError("Task is no longer in trash")
+            task = json.loads(row[0])
+            tasks = {t["id"]: t for t in state["tasks"]}
+            task["dependencies"] = [d for d in task["dependencies"] if d in tasks]
+            parent = tasks.get(task.get("parentId"))
+            task["parentId"] = parent["id"] if parent and not parent.get("parentId") else ""
+            if task["project"] not in {p["id"] for p in state["projects"]}:
+                task["project"] = ""
+            if task["status"] not in {c["id"] for c in state["columns"]}:
+                task["status"] = next(c["id"] for c in state["columns"] if c["id"] != "done")
+                task["completedAt"] = ""
+            state["tasks"].append(task)
+            state["tags"] = list(dict.fromkeys(state["tags"] + task["tags"]))
+            return state
+        return self.edit(payload.get("version"), operation, recovery=True)
 
     def save(self, state):
         return self.edit(state.get("version"), lambda _: copy.deepcopy(state))
