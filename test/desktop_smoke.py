@@ -127,13 +127,13 @@ def run():
           document.querySelector('#view-name').value='Multi dates';document.querySelector('[data-power=save-view]').click();
           check(Array.isArray(smoke.getState().savedViews.find(v=>v.name==='Multi dates').filter.rules[0].op),'Saved multi values');
           document.querySelector('[data-action=shortcuts]').click();
-          check(document.querySelector('[role=dialog]').textContent.includes('F1'),'Help contains shortcuts');
+          check(document.querySelector('[role=dialog]').textContent.includes('F12'),'Help contains shortcuts');
           document.querySelector('[data-action=close]').click();
-          document.dispatchEvent(new KeyboardEvent('keydown',{key:'F1',bubbles:true}));
-          check(document.querySelector('[role=dialog]').textContent.includes('Filtering'),'F1 opens help');
+          document.dispatchEvent(new KeyboardEvent('keydown',{key:'F12',bubbles:true}));
+          check(document.querySelector('[role=dialog]').textContent.includes('Filtering'),'F12 opens help');
           document.querySelector('[data-action=close]').click();
           smoke.openTask(id);const title=document.querySelector('#task-title');title.value='Unsaved draft';title.dispatchEvent(new Event('input',{bubbles:true}));
-          document.dispatchEvent(new KeyboardEvent('keydown',{key:'F1',bubbles:true}));document.querySelector('[data-action=close]').click();
+          document.dispatchEvent(new KeyboardEvent('keydown',{key:'F12',bubbles:true}));document.querySelector('[data-action=close]').click();
           check(document.querySelector('#task-title')===title&&title.value==='Unsaved draft','Help preserves unsaved edits');
           smoke.submitTask();
           smoke.power.reset();smoke.render();

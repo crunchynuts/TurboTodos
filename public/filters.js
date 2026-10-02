@@ -1,3 +1,4 @@
+export function tagTone(value){let hash=0;for(const c of value.toLowerCase())hash=(Math.imul(hash,31)+c.charCodeAt(0))>>>0;return 'tag-tone-'+(hash%8);}
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export function multiSelect(label,choices,selected,attribute){
   const values=Array.isArray(selected)?selected:[selected];
@@ -5,7 +6,7 @@ export function multiSelect(label,choices,selected,attribute){
 }
 export function multiValues(element){return [...element.querySelectorAll('input:checked')].map(input=>input.value);}
 export function inlineChoices(label,choices,selected,attribute){
-  return `<fieldset class="inline-filter" data-multi="${esc(attribute)}"><legend>${esc(label)}</legend><div class="inline-filter-values">${choices.map(([value,text])=>`<label><input type="checkbox" value="${esc(value)}" ${selected.includes(value)?'checked':''}><span>${esc(text)}</span></label>`).join('')||'<small>No choices yet.</small>'}</div></fieldset>`;
+  return `<fieldset class="inline-filter" data-multi="${esc(attribute)}"><legend>${esc(label)}</legend><div class="inline-filter-values">${choices.map(([value,text])=>`<label><input type="checkbox" value="${esc(value)}" ${selected.includes(value)?'checked':''}><span class="${attribute==='basic-tags'?tagTone(value):''}">${esc(text)}</span></label>`).join('')||'<small>No choices yet.</small>'}</div></fieldset>`;
 }
 document.addEventListener('click',e=>{
   const button=e.target.closest('[data-multi-clear]');if(!button)return;

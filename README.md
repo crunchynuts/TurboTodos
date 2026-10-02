@@ -148,7 +148,7 @@ Numbers are milliseconds for JavaScript plus forced layout, not database round-t
 
 Basic Tags, Priority, Status, and Projects filters use checkbox menus: select multiple choices without Ctrl. Sidebar tags also toggle independently. Quick date filters combine selected windows with OR and preserve other filter selections. Advanced filters support multiple values for projects, statuses, priorities, people, and tags, plus multiple date/review/state choices. Values within one condition match any selection, except explicit tag all/none and exclusion rules. Separate basic filters combine with AND. Empty choices remove that restriction. Older single-value saved views continue to load. Sort, grouping, and coloring remain display settings.
 
-Open **Help & shortcuts** from the sidebar or the top-bar question mark, or press **?** / **F1**. It includes keyboard shortcuts and guidance for filtering, bulk actions, reviews, and subtasks. Opening Help from a task keeps unsaved edits intact when you close Help.
+Open **Help & shortcuts** from the sidebar or the top-bar question mark, or press **?** / **F12**. It includes keyboard shortcuts and guidance for filtering, bulk actions, reviews, and subtasks. Opening Help from a task keeps unsaved edits intact when you close Help.
 
 ## Faster task entry, archived projects, and task numbers
 

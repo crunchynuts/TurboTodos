@@ -69,7 +69,7 @@ def build_html():
     script = "window.TURBO_DESKTOP=true;\n"
     script += "window.TURBO_IMPORT_TEMPLATE=" + json.dumps((public / "import-template.csv").read_text(encoding="utf-8")) + ";\n"
     script += "(async()=>{\n"
-    for name, exports in [("filters.js", "multiSelect,multiValues,inlineChoices"), ("render.js", "patchHTML,renderFragment"), ("transport.js", "apiFetch,saveDownload,preferences"), ("export.js", "exportExcel"), ("bulk.js", "bulk"), ("power.js", "power,matchesFilter,taskProgress"), ("qol.js", "qol")]:
+    for name, exports in [("filters.js", "multiSelect,multiValues,inlineChoices,tagTone"), ("render.js", "patchHTML,renderFragment"), ("transport.js", "apiFetch,saveDownload,preferences"), ("export.js", "exportExcel"), ("bulk.js", "bulk"), ("power.js", "power,matchesFilter,taskProgress"), ("qol.js", "qol")]:
         script += f"const {{{exports}}}=(()=>{{\n{source(name)}\nreturn {{{exports}}};\n}})();\n"
     script += source("app.js") + "\n})();"
     favicon = "data:image/svg+xml;base64," + base64.b64encode((public / "favicon.svg").read_bytes()).decode()
