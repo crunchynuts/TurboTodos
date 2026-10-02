@@ -73,6 +73,11 @@ def run():
           smoke.complete(s.tasks[1].id);check(smoke.qol.reasons(s.tasks[0]).includes('Dependencies cleared'),'Cleared dependency alert');
           document.querySelector('[data-qol=acknowledge]').click();check(!smoke.qol.reasons(s.tasks[0]).includes('Dependencies cleared'),'Acknowledgement');
           smoke.complete(s.tasks[1].id);smoke.complete(s.tasks[1].id);check(smoke.qol.reasons(s.tasks[0]).includes('Dependencies cleared'),'New completion resurfaces');
+          const beforeStack=JSON.stringify(s.tasks);document.querySelector('[data-action=receipts]').click();
+          check(document.querySelectorAll('.order-chit').length===s.tasks.filter(t=>t.status==='done').length,'Daily rails display completed tasks');
+          check(document.querySelector('.day-rail'),'Daily rail present');check(!document.querySelector('[data-stack-style]'),'Spike selector removed');
+          check(document.querySelector('.order-chit h3').textContent===s.tasks[1].title,'Chit task identity');
+          check(JSON.stringify(s.tasks)===beforeStack,'Stack browsing leaves tasks untouched');smoke.closeOverlay(true);
           smoke.qol.saveTemplate(s.tasks[0].id);document.querySelector('[name=name]').value='Course template';document.querySelector('#modal-form').requestSubmit();
           const originalLive=JSON.stringify(s.tasks);
           smoke.qol.editTemplate(s.templates[0].id);
