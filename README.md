@@ -18,6 +18,14 @@ To move to another computer, copy or zip the project without `.venv` and `__pyca
 
 Optional browser mode remains available through `python server.py --port 3000`, then http://localhost:3000. It uses the same SQLite database and requires only Python's standard library. Desktop mode does not start or import that server.
 
+## Default project and cancellation
+
+In **New task**, choose a project (including **No project**), check **Use this project as the default**, and create the task. Subsequent new tasks and Quick capture remember that choice across restarts. Leaving the checkbox unchecked changes only this task. An archived or missing default falls back to No project. Explicit project choices from a project column, subtask, duplicate, or template remain in effect.
+
+Choose **Cancelled** in the existing Status controls to keep a task without treating it as open work. It stops reminders, overdue alerts, and active-work counts; it stays visible in All tasks and can be filtered by status or reopened by choosing an active status. Cancelled tasks do not enter the Done stack or satisfy dependencies. Cancelling a parent does not change its subtasks.
+
+To update an existing installation, close TurboTodos, back up your `data` folder, then replace the application code in the same folder while keeping `data` and `.venv`. If you use `--db` or `DB_PATH`, keep using the same database path. The update adds the Cancelled column and saves a pre-upgrade snapshot automatically; it does not replace tasks, renumber them, or reset settings. Extracting the code into a separate folder without your existing database will open a fresh workspace instead.
+
 ## Bulk tags
 
 1. Click **Select tasks**. Square selection checkboxes appear in every view, separate from the round completion buttons.

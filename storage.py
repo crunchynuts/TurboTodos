@@ -24,7 +24,7 @@ def initial_workspace():
         "version": 1, "tasks": [], "projects": [], "tags": [],
         "columns": [{"id": key, "name": name} for key, name in
                     [("backlog", "Backlog"), ("next", "Up next"),
-                     ("doing", "In progress"), ("done", "Done")]],
+                     ("doing", "In progress"), ("done", "Done"), ("cancelled", "Cancelled")]],
         "settings": {"coloring": "priority"},
     }
 
@@ -76,7 +76,7 @@ def validate(state, *, template=False):
             raise ValueError(f"Duplicate {name} identifiers")
     columns = {c["id"] for c in state["columns"]}
     projects = {p["id"] for p in state["projects"]}
-    if "done" not in columns or len(columns) < 2:
+    if "done" not in columns or not columns - {"done", "cancelled"}:
         raise ValueError("Keep the Done column and at least one active column")
     for item in state["columns"] + state["projects"]:
         text(item.get("name"), "name", 100, required=True)
@@ -90,6 +90,7 @@ def validate(state, *, template=False):
     if state.get("settings", {}).get("coloring") not in {"priority", "project", "deadline", "none"}:
         raise ValueError("Invalid color rule")
     zoom = state["settings"].get("zoom", 100)
+    text(state["settings"].get("defaultProject", ""), "default project", 99)
     if type(zoom) is not int or not 80 <= zoom <= 180 or zoom % 10:
         raise ValueError("Zoom must be 80 to 180 percent in steps of 10")
     if not template:
@@ -252,6 +253,9 @@ class Store:
             db.execute("CREATE TABLE IF NOT EXISTS task_numbers (number INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT NOT NULL UNIQUE)")
             current = json.loads(db.execute("SELECT value FROM workspace WHERE id=1").fetchone()[0])
             before = copy.deepcopy(current)
+            if not any(c["id"] == "cancelled" for c in current["columns"]):
+                self._backup(current, force=True)
+                current["columns"].append({"id": "cancelled", "name": "Cancelled"})
             self._number_tasks(db, current)
             for project in current["projects"]:
                 project.setdefault("active", True)
@@ -292,6 +296,8 @@ class Store:
             if type(expected_version) is not int or expected_version != current["version"]:
                 raise Conflict("This workspace changed in another window. Reload or preview again before editing.")
             result = operation(copy.deepcopy(current))
+            if not any(c["id"] == "cancelled" for c in result["columns"]):
+                result["columns"].append({"id": "cancelled", "name": "Cancelled"})
             previous_projects = {p["id"]: p for p in current["projects"]}
             previous_tasks = {t["id"]: t for t in current["tasks"]}
             for project in result["projects"]:
@@ -357,7 +363,7 @@ class Store:
             if task["project"] not in {p["id"] for p in state["projects"]}:
                 task["project"] = ""
             if task["status"] not in {c["id"] for c in state["columns"]}:
-                task["status"] = next(c["id"] for c in state["columns"] if c["id"] != "done")
+                task["status"] = next(c["id"] for c in state["columns"] if c["id"] not in {"done", "cancelled"})
                 task["completedAt"] = ""
             state["tasks"].append(task)
             state["tags"] = list(dict.fromkeys(state["tags"] + task["tags"]))

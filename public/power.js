@@ -16,7 +16,7 @@ export function taskProgress(task,children=[]){
 }
 
 export function attentionReasons(t,lookup,now=today(),clock=new Date()) {
-  if(t.status==='done')return [];
+  if(['done','cancelled'].includes(t.status))return [];
   const reasons=[];
   if(t.due&&t.due<=now)reasons.push(t.due<now?'Overdue':'Due today');
   if(t.reviewDate&&t.reviewDate<=now)reasons.push('Review due');
@@ -53,7 +53,7 @@ export function matchesFilter(task,node,tasks,now=today()) {
   if(field==='radar')return Boolean(task.onRadar)===(op==='yes');
   if(field==='progress')return taskProgress(task,tasks.filter(t=>t.parentId===task.id))===op;
   if(field==='parent')return Boolean(task.parentId)===(op==='sub');
-  if(field==='status'&&['active','done'].includes(op))return (task.status==='done')===(op==='done');
+  if(field==='status'&&['active','done'].includes(op))return op==='done'?task.status==='done':!['done','cancelled'].includes(task.status);
   return !values.length|| (op==='isNot'?!values.includes(task[field]):values.includes(task[field]));
 }
 
@@ -73,6 +73,7 @@ const blank=()=>({mode:'all',rules:[]});
 let host, active=blank(), activeName='', draft, quick=[], expanded=new Set();
 
 export const power={
+  defaultProject(fallback=''){const s=host.state(),id=s.settings.defaultProject??fallback;return s.projects.some(p=>p.id===id&&p.active!==false)?id:'';},
   configure(value){host=value;},
   layout(){return {active,activeName,quick,expanded:[...expanded]};},
   restoreLayout(l){if(!l)return;active=l.active?.rules?l.active:blank();activeName=l.activeName||'';quick=Array.isArray(l.quick)?l.quick:[];expanded=new Set(l.expanded||[]);},
@@ -82,9 +83,9 @@ export const power={
   attention(t){return attentionReasons(t,host.task);},
   progress(task){return taskProgress(task,this.children(task.id));},
   children(id){return host.children(id);},
-  reviewDue(t){return t.status!=='done'&&t.reviewDate&&t.reviewDate<=today();},
-  radar(t){return t.status!=='done'&&(t.onRadar||t.reviewDate||t.delegatedTo||t.due&&t.due<=plus(today(),29));},
-  myDay(t){return t.status!=='done'&&(this.reviewDue(t)||t.due&&t.due<=today()||!t.waitingOn&&!t.delegatedTo&&!t.onRadar&&!t.reviewDate&&t.status==='doing');},
+  reviewDue(t){return !['done','cancelled'].includes(t.status)&&t.reviewDate&&t.reviewDate<=today();},
+  radar(t){return !['done','cancelled'].includes(t.status)&&(t.onRadar||t.reviewDate||t.delegatedTo||t.due&&t.due<=plus(today(),29));},
+  myDay(t){return !['done','cancelled'].includes(t.status)&&(this.reviewDue(t)||t.due&&t.due<=today()||!t.waitingOn&&!t.delegatedTo&&!t.onRadar&&!t.reviewDate&&t.status==='doing');},
   visible(tasks,respectCollapse=false){
     if(!respectCollapse&&(host.filtersActive()||this.hasFilter()))return tasks;
     const ids=new Set(tasks.map(t=>t.id));
