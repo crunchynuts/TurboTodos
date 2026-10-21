@@ -113,7 +113,7 @@ def normalize(row, defaults, state):
     notes_html = "<p>" + html.escape(notes).replace("\n", "<br>") + "</p>" if notes else ""
     text(notes_html, "formatted notes", 200_000)
     now = datetime.now(timezone.utc).isoformat()
-    first_column = next(c["id"] for c in state["columns"] if c["id"] != "done")
+    first_column = next(c["id"] for c in state["columns"] if c["id"] not in {"done", "cancelled"})
     status = resolve(row.get("status") or defaults.get("status") or first_column, state["columns"], "status")
     project = resolve(row.get("project") or defaults.get("project") or "", [p for p in state["projects"] if p.get("active", True)], "project", allow_empty=True)
     priority = text(row.get("priority") or "medium", "priority", 20).lower()
